@@ -1,0 +1,50 @@
+#!/bin/bash
+
+conf_path="$HOME/.config/ncp"
+src_path=""
+dest_path=""
+
+function is_valid_ip()
+{
+    local ip=$1
+
+    # Check if IP follows pattern of 4 dot-separated numbers
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        # Split IP into octets and verify each number is between 0-255
+        IFS='.' read -r -a octets <<< "$ip"
+        for octet in "${octets[@]}"; do
+            if [ "$octet" -gt 255 ] || [ "$octet" -lt 0 ]; then
+                return 1
+            fi
+        done
+        return 0
+    else
+        return 1
+    fi
+}
+
+function build_conf()
+{
+    local ip_or_path
+    local ip_username
+
+    echo "building config file..."
+    read -rp "input source ip/path of source: " ip_or_path
+    src_path="${ip_or_path}"
+    if is_valid_ip "$ip_or_path";
+    then
+        read -rp "input usename to connect to: " ip_username
+        src_path="${ip_or_path}@${ip_username}:"
+    fi
+
+    read -rp "input destination ip/path of source: " ip_or_path
+    dest_path="${ip_or_path}"
+    if is_valid_ip "$ip_or_path";
+    then
+        read -rp "input usename to connect to: " ip_username
+        dest_path="${ip_or_path}@${ip_username}:"
+    fi
+}
+build_conf
+
+echo $src_path $dest_path $conf_path

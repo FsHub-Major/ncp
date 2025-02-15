@@ -2,7 +2,7 @@
 
 conf_path="$HOME/.config/ncp"
 options="-avzh --progress --partial -e ssh"
-prg_name="$0"
+prg_name="$(basename "$0")"
 declare server_path
 declare local_path
 declare mode
@@ -29,7 +29,8 @@ function debug()
 
 function right_usage()
 {
-    echo "${prg_name}: usage: ${prg_name} [options..] <local_path> <server_path>"
+    echo -e "${prg_name}: usage: ${prg_name} <options> <local_path> <server_path> \
+    \n            ${prg_name} <-s|--setup> "
     echo -e " options: \
     \n      -s, --setup        :to set up configuration \
     \n      -d, --download     :to download from server \
@@ -77,6 +78,11 @@ function build_conf()
     echo "building config file..."
 
     read -rp "input server ip address: " server_ip
+    if ! is_valid_ip "$server_ip" ;
+    then
+        echo "${prg_name}: ivalid ip address ${server_ip} !"
+        exit 2
+    fi
     read -rp "input server username: " server_usr
     write_conf "$server_ip" "$server_usr" "$server_path" "$mode"
 }
@@ -85,7 +91,7 @@ function check_file()
     if [ ! -s "$conf_path" ];
     then
         build_conf
-    fi 
+    fi
 }
 
 function check_var()
@@ -103,6 +109,19 @@ function fill_paths()
     server_path="$2"
 }
 
+function fill_down_up()
+{
+    check_var "$1"; check_var "$2"; fill_paths "$1" "$2"; check_file
+    source "$HOME/.config/ncp"
+
+    mode="u"
+    if [[ "$3"  ==  "--download"  || "$3" == "-d" ]];
+    then
+        mode="d"
+    fi
+}
+
+
  function main
  {
     if [ $# -le 0 ];
@@ -112,49 +131,32 @@ function fill_paths()
 
     case $1 in
     --setup|-s)
-        build_conf
-        source "$HOME/.config/ncp"
-        check_var "$2"
-        local_path="$2"
-    ;;
-    --download|-d)
-        mode="d"
-        check_file
-        check_var "$2"; check_var "$3"
-        fill_paths "$2" "$3"
-        build_conf
-    ;;
-    --upload|-u)
-        mode="u"
-        check_file
-        check_var "$2"; check_var "$3"
-        fill_paths "$2" "$3"
-        build_conf
-    ;;
-    "")
+    if [ ! -z "$2" ];
+    then
+        echo "${prg_name}: option $1 takes no arguments"
         right_usage
+    fi
+        build_conf
+        exit 0
+    ;;
+    --download|--upload|-d|-u)
+        fill_down_up "$2" "$3" "$1"
     ;;
     *)
-    check_file
-    check_var "$2"; check_var "$3"
-    fill_paths "$2" "$3"
-    source "$HOME/.config/ncp"
+        right_usage
     ;;
     esac
 
     debug
     exit 0
-    case "$mode" in
-    [Dd]|"")  # Download or empty
+    if [ "$mode" == "d" ];
+    then
+        # Download
         rsync ${options} "${server_usr}@${server_ip}:${server_path}" "${local_path}"
-        ;;
-    [Uu])  # Upload
+    else
+        # Upload
         rsync ${options} "${local_path}" "${server_usr}@${server_ip}:${server_path}"
-        ;;
-    *)  # Invalid mode
-        right_usage
-        ;;
-    esac
+    fi
 
 
 

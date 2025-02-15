@@ -1,8 +1,54 @@
 #!/bin/bash
 
 conf_path="$HOME/.config/ncp"
-src_path=""
-dest_path=""
+options="-avzh --progress --partial -e ssh"
+prg_name="$0"
+declare server_path
+declare local_path
+declare mode
+
+
+
+
+
+function debug()
+{
+    echo "=== Debug Information ==="
+    echo "Configuration Path: $conf_path"
+    echo "Program Name: $prg_name"
+    echo "Local Path: $local_path"
+    echo "Rsync Options: $options"
+    echo
+    echo "=== Server Settings ==="
+    echo "Server IP: $server_ip"
+    echo "Server User: $server_usr"
+    echo "Server Path: $server_path"
+    echo "Transfer Mode: $mode"
+    echo "===================="
+}
+
+function right_usage()
+{
+    echo "${prg_name}: usage: ${prg_name} [options..] <local_path> <server_path>"
+    echo -e " options: \
+    \n      -s, --setup        :to set up configuration \
+    \n      -d, --download     :to download from server \
+    \n      -u, --upload       :to upload   from server "
+    exit 3
+}
+
+function write_conf()
+{
+    local server_ip="$1"
+    local server_usr="$2"
+    local server_path="$3"
+    local mode="$4"
+
+    { echo "server_ip=${server_ip}"; \
+    echo "server_usr=${server_usr}"; \
+    echo "server_path=${server_path}"; \
+    echo "mode=${mode}"; }  >> "$conf_path"
+}
 
 function is_valid_ip()
 {
@@ -25,26 +71,93 @@ function is_valid_ip()
 
 function build_conf()
 {
-    local ip_or_path
-    local ip_username
+    local server_ip
+    local server_usr
 
     echo "building config file..."
-    read -rp "input source ip/path of source: " ip_or_path
-    src_path="${ip_or_path}"
-    if is_valid_ip "$ip_or_path";
-    then
-        read -rp "input usename to connect to: " ip_username
-        src_path="${ip_or_path}@${ip_username}:"
-    fi
 
-    read -rp "input destination ip/path of source: " ip_or_path
-    dest_path="${ip_or_path}"
-    if is_valid_ip "$ip_or_path";
+    read -rp "input server ip address: " server_ip
+    read -rp "input server username: " server_usr
+    write_conf "$server_ip" "$server_usr" "$server_path" "$mode"
+}
+function check_file()
+{
+    if [ ! -s "$conf_path" ];
     then
-        read -rp "input usename to connect to: " ip_username
-        dest_path="${ip_or_path}@${ip_username}:"
+        build_conf
+    fi 
+}
+
+function check_var()
+{
+    local var="$1"
+    if [ -z "$var" ];
+    then
+        right_usage
     fi
 }
-build_conf
 
-echo $src_path $dest_path $conf_path
+function fill_paths()
+{
+    local_path="$1"
+    server_path="$2"
+}
+
+ function main
+ {
+    if [ $# -le 0 ];
+    then
+        right_usage
+    fi
+
+    case $1 in
+    --setup|-s)
+        build_conf
+        source "$HOME/.config/ncp"
+        check_var "$2"
+        local_path="$2"
+    ;;
+    --download|-d)
+        mode="d"
+        check_file
+        check_var "$2"; check_var "$3"
+        fill_paths "$2" "$3"
+        build_conf
+    ;;
+    --upload|-u)
+        mode="u"
+        check_file
+        check_var "$2"; check_var "$3"
+        fill_paths "$2" "$3"
+        build_conf
+    ;;
+    "")
+        right_usage
+    ;;
+    *)
+    check_file
+    check_var "$2"; check_var "$3"
+    fill_paths "$2" "$3"
+    source "$HOME/.config/ncp"
+    ;;
+    esac
+
+    debug
+    exit 0
+    case "$mode" in
+    [Dd]|"")  # Download or empty
+        rsync ${options} "${server_usr}@${server_ip}:${server_path}" "${local_path}"
+        ;;
+    [Uu])  # Upload
+        rsync ${options} "${local_path}" "${server_usr}@${server_ip}:${server_path}"
+        ;;
+    *)  # Invalid mode
+        right_usage
+        ;;
+    esac
+
+
+
+ }
+
+ main $@

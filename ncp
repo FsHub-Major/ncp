@@ -160,4 +160,4 @@ function fill_paths()
 
  }
 
- main $@
+ main "$@"

@@ -1,15 +1,17 @@
 #!/bin/bash
 
-conf_path="$HOME/.config/ncp"
-options="-avzh --progress --partial -e ssh"
+conf_path="$HOME/.config/ncp.conf"
 prg_name="$(basename "$0")"
 declare server_path
 declare local_path
 declare mode
-
-
-
-
+options=(
+    "-avzh"
+    "--progress"
+    "--partial"
+    "-e"
+    "ssh"
+)
 
 function debug()
 {
@@ -17,7 +19,7 @@ function debug()
     echo "Configuration Path: $conf_path"
     echo "Program Name: $prg_name"
     echo "Local Path: $local_path"
-    echo "Rsync Options: $options"
+    echo "Rsync Options: ${options[*]}"
     echo
     echo "=== Server Settings ==="
     echo "Server IP: $server_ip"
@@ -29,7 +31,7 @@ function debug()
 
 function right_usage()
 {
-    echo -e "${prg_name}: usage: ${prg_name} <options> <local_path> <server_path> \
+    echo -e "${prg_name}: usage: ${prg_name} <options> <server_path> <local_path> \
     \n            ${prg_name} <-s|--setup> "
     echo -e " options: \
     \n      -s, --setup        :to set up configuration \
@@ -42,13 +44,25 @@ function write_conf()
 {
     local server_ip="$1"
     local server_usr="$2"
-    local server_path="$3"
-    local mode="$4"
-
-    { echo "server_ip=${server_ip}"; \
-    echo "server_usr=${server_usr}"; \
-    echo "server_path=${server_path}"; \
-    echo "mode=${mode}"; }  >> "$conf_path"
+    
+    # Start writing to config file
+    {
+        echo "server_ip='${server_ip}'"
+        echo "server_usr='${server_usr}'"
+        echo -n "options=("
+        # Write array elements properly quoted
+        local first=true
+        for opt in "${options[@]}"; do
+            if [ "$first" = true ]; then
+                echo -n $'\n    '
+                first=false
+            else
+                echo -e '\n    '
+            fi
+            echo -n "'${opt}'"
+        done
+        echo $'\n)'
+    } > "$conf_path"
 }
 
 function is_valid_ip()
@@ -74,8 +88,9 @@ function build_conf()
 {
     local server_ip
     local server_usr
+    local -a opt
 
-    echo "building config file..."
+    echo "building config file..."; sleep 0.3
 
     read -rp "input server ip address: " server_ip
     if ! is_valid_ip "$server_ip" ;
@@ -84,8 +99,25 @@ function build_conf()
         exit 2
     fi
     read -rp "input server username: " server_usr
-    write_conf "$server_ip" "$server_usr" "$server_path" "$mode"
+    # Read options as array
+    read -ra opt -p "input additional options default to '${options[*]}': "
+    
+    # Now opt contains an array of the input options
+    # Use it or merge with existing options
+    if [ ${#opt[@]} -gt 0 ]; then
+        if [ "${opt[0]}" = "+=" ]; then
+            # Remove += and append remaining elements to existing options
+            unset 'opt[0]'
+            options+=("${opt[@]}")
+        else
+            # Replace existing options with new ones
+            options=("${opt[@]}")
+        fi
+    fi
+    
+    write_conf "$server_ip" "$server_usr"
 }
+
 function check_file()
 {
     if [ ! -s "$conf_path" ];
@@ -105,14 +137,19 @@ function check_var()
 
 function fill_paths()
 {
-    local_path="$1"
-    server_path="$2"
+    server_path="$1"
+    local_path="$2"
 }
 
 function fill_down_up()
 {
     check_var "$1"; check_var "$2"; fill_paths "$1" "$2"; check_file
-    source "$HOME/.config/ncp"
+    # shellcheck source=$HOME/.config/ncp.conf
+    if ! source "$conf_path";
+    then
+        echo "Error: Failed to load configuration file"
+        exit 1
+    fi
 
     mode="u"
     if [[ "$3"  ==  "--download"  || "$3" == "-d" ]];
@@ -121,11 +158,32 @@ function fill_down_up()
     fi
 }
 
+function check_rsync() {
+    if ! command -v rsync >/dev/null 2>&1; then
+        echo "${prg_name}: Error: rsync is required but not installed"
+        
+        # Detect package manager and suggest installation command
+        if command -v apt-get >/dev/null 2>&1; then
+            echo "To install on Debian/Ubuntu, run: sudo apt-get install rsync"
+        elif command -v dnf >/dev/null 2>&1; then
+            echo "To install on Fedora, run: sudo dnf install rsync"
+        elif command -v yum >/dev/null 2>&1; then
+            echo "To install on CentOS/RHEL, run: sudo yum install rsync"
+        elif command -v pacman >/dev/null 2>&1; then
+            echo "To install on Arch Linux, run: sudo pacman -S rsync"
+        elif command -v zypper >/dev/null 2>&1; then
+            echo "To install on openSUSE, run: sudo zypper install rsync"
+        else
+            echo "Please install rsync using your system's package manager"
+        fi
+        exit 1
+    fi
+}
 
- function main
- {
-    if [ $# -le 0 ];
-    then
+function main() {
+    check_rsync
+    
+    if [ $# -le 0 ]; then
         right_usage
     fi
 
@@ -147,19 +205,14 @@ function fill_down_up()
     ;;
     esac
 
-    debug
-    exit 0
     if [ "$mode" == "d" ];
     then
         # Download
-        rsync ${options} "${server_usr}@${server_ip}:${server_path}" "${local_path}"
+        rsync "${options[@]}" "${server_usr}@${server_ip}:${server_path}" "${local_path}"
     else
         # Upload
-        rsync ${options} "${local_path}" "${server_usr}@${server_ip}:${server_path}"
+        rsync "${options[@]}" "${local_path}" "${server_usr}@${server_ip}:${server_path}"
     fi
+}
 
-
-
- }
-
- main "$@"
+main "$@"

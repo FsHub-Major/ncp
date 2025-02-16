@@ -28,13 +28,25 @@ important note: insure that "~/.local/bin" included in your path directory
 
 ### Basic Usage
 The basic syntax for NCP follows this pattern:
-```sh
-ncp [options] <local_path> <server_path>
+```console
+ncp [options] <server_path> <local_path>
 ```
 
 ### Options
 
 . -s, --setup: Configure server settings
 ```sh
-ncp --setup <local_path>
+ncp --setup
 ```
+. -d, --download, -u, --upload: choose whats ever downlowd or upload from/to server
+```sh
+ncp [<-d|--download|-u|--upload>] <server_path> <local_path>
+```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+© 2024 la9la9. All rights reserved.
+
+

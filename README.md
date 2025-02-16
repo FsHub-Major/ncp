@@ -43,10 +43,16 @@ ncp --setup
 ncp [<-d|--download|-u|--upload>] <server_path> <local_path>
 ```
 
-## License
+## Dependencies
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+This tool relies on rsync, which is distributed under the GNU General Public License (GPL). Ensure that rsync is installed on your system before using this tool.
 
-© 2024 la9la9. All rights reserved.
+For more information about rsync, visit: [https://rsync.samba.org/](https://rsync.samba.org/)
+
+## Licensing
+
+MyTool is licensed under the [MIT License](LICENSE.md). However, note that rsync itself is licensed under the GNU GPL.
+
+© 2024 FsHub-Major. All rights reserved.
 
 

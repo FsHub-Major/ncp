@@ -47,6 +47,6 @@ ncp [<-d|--download|-u|--upload>] <server_path> <local_path>
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
 
-© 2024 la9la9. All rights reserved.
+© 2024 FsHub-Major. All rights reserved.
 
 

@@ -9,8 +9,6 @@ options=(
     "-avzh"
     "--progress"
     "--partial"
-    "-e"
-    "ssh"
 )
 
 function debug()
@@ -141,23 +139,6 @@ function fill_paths()
     local_path="$2"
 }
 
-function fill_down_up()
-{
-    check_var "$1"; check_var "$2"; fill_paths "$1" "$2"; check_file
-    # shellcheck source=$HOME/.config/ncp.conf
-    if ! source "$conf_path";
-    then
-        echo "Error: Failed to load configuration file"
-        exit 1
-    fi
-
-    mode="u"
-    if [[ "$3"  ==  "--download"  || "$3" == "-d" ]];
-    then
-        mode="d"
-    fi
-}
-
 function check_rsync() {
     if ! command -v rsync >/dev/null 2>&1; then
         echo "${prg_name}: Error: rsync is required but not installed"
@@ -180,6 +161,70 @@ function check_rsync() {
     fi
 }
 
+function parse_options() {
+    # Define short and long options
+    local short_opts="sdu"  # Removed colons as we don't expect direct arguments
+    local long_opts="setup,download,upload"
+    local -i passed=0
+
+    # Get parsed options
+    if ! PARSED=$(getopt --options=${short_opts} --longoptions=${long_opts} --name "$0" -- "$@"); then
+        exit 1
+    fi
+    eval set -- "$PARSED"
+
+    while true; do
+        case "$1" in
+            -s|--setup)
+                if [ -n "$1" ] || [ "$1" != "--" ];
+                then
+                    echo "${prg_name}: option $1 takes no arguments"
+                    right_usage
+                fi
+                build_conf
+                exit 0
+                ;;
+            -d|-u|--download|--upload)
+            if [[ "$1"  == "-d"  || "$1" == "--download" ]];
+            then
+                mode="d"
+            else
+                mode="u"
+            fi
+            if [ ${passed} -eq 1 ];
+            then
+                right_usage
+            fi
+            passed=1
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            *)
+                right_usage
+                ;;
+        esac
+    done
+
+    # After option parsing, check remaining arguments
+    if [ $# -lt 2 ]; then
+        echo "${prg_name}: missing paths arguments"
+        right_usage
+    fi
+
+    # Get the last two arguments
+    local args=("$@")
+    local len=${#args[@]}
+    server_path="${args[${len}-2]}"
+    local_path="${args[${len}-1]}"
+
+    # Validate required arguments
+    check_var "$server_path"
+    check_var "$local_path"
+}
+
 function main() {
     check_rsync
     
@@ -187,31 +232,21 @@ function main() {
         right_usage
     fi
 
-    case $1 in
-    --setup|-s)
-    if [ ! -z "$2" ];
-    then
-        echo "${prg_name}: option $1 takes no arguments"
-        right_usage
-    fi
-        build_conf
-        exit 0
-    ;;
-    --download|--upload|-d|-u)
-        fill_down_up "$2" "$3" "$1"
-    ;;
-    *)
-        right_usage
-    ;;
-    esac
+    parse_options "$@"
+    check_file
 
-    if [ "$mode" == "d" ];
-    then
+    # Source configuration
+    if ! source "$conf_path"; then
+        echo "Error: Failed to load configuration file"
+        exit 1
+    fi
+
+    if [ "$mode" == "d" ]; then
         # Download
-        rsync "${options[@]}" "${server_usr}@${server_ip}:${server_path}" "${local_path}"
+        echo "${options[@]}" "${server_usr}@${server_ip}:${server_path}" "${local_path}"
     else
         # Upload
-        rsync "${options[@]}" "${local_path}" "${server_usr}@${server_ip}:${server_path}"
+        echo "${options[@]}" "${local_path}" "${server_usr}@${server_ip}:${server_path}"
     fi
 }
 

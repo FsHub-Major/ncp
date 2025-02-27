@@ -4,7 +4,10 @@ conf_path="$HOME/.config/ncp.conf"
 prg_name="$(basename "$0")"
 declare server_path
 declare local_path
+declare server_ip
+declare server_usr
 declare mode
+declare -i rsync_demon=0
 options=(
     "-avzh"
     "--progress"
@@ -29,12 +32,16 @@ function debug()
 
 function right_usage()
 {
-    echo -e "${prg_name}: usage: ${prg_name} <options> <server_path> <local_path> \
+    echo -e "${prg_name}: usage: ${prg_name} <-d|--download|-u|--upload> \
+<server_path> <local_path> \
+    \n            ${prg_name} <-d|--download|-u|--upload> [<-r|--rsync>] \
+<server_module> <local_path> \
     \n            ${prg_name} <-s|--setup> "
     echo -e " options: \
     \n      -s, --setup        :to set up configuration \
     \n      -d, --download     :to download from server \
-    \n      -u, --upload       :to upload   from server "
+    \n      -u, --upload       :to upload   from server \
+    \n      -r, --rsync        :to use rsync protocol   "
     exit 3
 }
 
@@ -42,11 +49,13 @@ function write_conf()
 {
     local server_ip="$1"
     local server_usr="$2"
+    local rsync_demon="$3"
     
     # Start writing to config file
     {
         echo "server_ip='${server_ip}'"
         echo "server_usr='${server_usr}'"
+        echo "rsync_demon='${rsync_demon}'"
         echo -n "options=("
         # Write array elements properly quoted
         local first=true
@@ -113,7 +122,7 @@ function build_conf()
         fi
     fi
     
-    write_conf "$server_ip" "$server_usr"
+    write_conf "$server_ip" "$server_usr" "$rsync_demon"
 }
 
 function check_file()
@@ -131,12 +140,6 @@ function check_var()
     then
         right_usage
     fi
-}
-
-function fill_paths()
-{
-    server_path="$1"
-    local_path="$2"
 }
 
 function check_rsync() {
@@ -160,11 +163,39 @@ function check_rsync() {
         exit 1
     fi
 }
+function run_cmd()
+{
+    local server_side
 
-function parse_options() {
+
+    if [ "$mode" == "d" ]; then
+        # Download
+        if [ ${rsync_demon} -eq 0 ];
+        then
+            server_side="${server_usr}@${server_ip}:${server_path}"
+        else
+            server_side="rsync://${server_usr}@${server_ip}::${server_path}"
+        fi
+        rsync "${options[@]}" \
+        "${server_side}" "${local_path}"
+    else
+        # Upload
+        if [ ${rsync_demon} -eq 0 ];
+        then
+            server_side="${server_usr}@${server_ip}:${server_path}"
+        else
+            server_side="rsync://${server_usr}@${server_ip}::${server_path}"
+        fi
+        rsync "${options[@]}" \
+        "${local_path}" "${server_side}" 
+    fi
+}
+
+function parse_options()
+{
     # Define short and long options
-    local short_opts="sdu"  # Removed colons as we don't expect direct arguments
-    local long_opts="setup,download,upload"
+    local short_opts="sdur"  # Removed colons as we don't expect direct arguments
+    local long_opts="setup,download,upload,rsync-demon"
     local -i passed=0
 
     # Get parsed options
@@ -176,8 +207,9 @@ function parse_options() {
     while true; do
         case "$1" in
             -s|--setup)
-                if [ -n "$1" ] || [ "$1" != "--" ];
+                if [[ "$2" == "--" && -n "$3" ]];
                 then
+                    echo "$PARSED"
                     echo "${prg_name}: option $1 takes no arguments"
                     right_usage
                 fi
@@ -196,6 +228,10 @@ function parse_options() {
                 right_usage
             fi
             passed=1
+                shift
+                ;;
+            -r|--rsync-demon)
+                rsync_demon=1
                 shift
                 ;;
             --)
@@ -236,18 +272,13 @@ function main() {
     check_file
 
     # Source configuration
+    # shellcheck source=/home/viktorevo/.config/ncp.conf
     if ! source "$conf_path"; then
         echo "Error: Failed to load configuration file"
         exit 1
     fi
 
-    if [ "$mode" == "d" ]; then
-        # Download
-        echo "${options[@]}" "${server_usr}@${server_ip}:${server_path}" "${local_path}"
-    else
-        # Upload
-        echo "${options[@]}" "${local_path}" "${server_usr}@${server_ip}:${server_path}"
-    fi
+    run_cmd
 }
 
 main "$@"
